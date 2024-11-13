@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Project ChessBoard</title>
+  <style>
+    .chessboard {
+      display: grid;
+      grid-template-columns: repeat(8, 50px);
+      grid-template-rows: repeat(8, 50px);
+      border: 2px solid black;
+      width: 400px;
+      height: 400px;
+    }
+
+    .square {
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .black { background-color: #f0d9b5; }
+    .white { background-color: #b58863; }
+    .highlight { background-color: #ffeb3b !important; }
+    
+    .piece { cursor: pointer; font-size: 32px; }
+  </style>
+</head>
+<body>
+  <div class="chessboard" id="chessboard"></div>
+
+  <script>
+    const PIECES = {
+      'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔',
+      'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚'
+    };
+
+    const initialBoard = [
+      ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+      ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+      ['', '', '', '', '', '', '', ''],
+      ['', '', '', '', '', '', '', ''],
+      ['', '', '', '', '', '', '', ''],
+      ['', '', '', '', '', '', '', ''],
+      ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+      ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+    ];
+
+    let selectedPiece = null;
+    let currentTurn = 'white';
+    const chessboard = document.getElementById("chessboard");
+
+    function renderBoard() {
+      chessboard.innerHTML = '';
+      for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+          const square = document.createElement("div");
+          square.classList.add("square", (row + col) % 2 === 0 ? "white" : "black");
+          square.dataset.row = row;
+          square.dataset.col = col;
+
+          const piece = initialBoard[row][col];
+          if (piece) {
+            const pieceElement = document.createElement("span");
+            pieceElement.classList.add("piece");
+            pieceElement.textContent = PIECES[piece];
+            pieceElement.dataset.piece = piece;
+            pieceElement.dataset.color = piece === piece.toUpperCase() ? 'white' : 'black';
+            square.appendChild(pieceElement);
+          }
+
+          square.addEventListener('click', handleSquareClick);
+          chessboard.appendChild(square);
+        }
+      }
+    }
+
+    function handleSquareClick(event) {
+      const square = event.currentTarget;
+      const row = parseInt(square.dataset.row);
+      const col = parseInt(square.dataset.col);
+      const pieceElement = square.querySelector(".piece");
+
+      if (pieceElement && pieceElement.dataset.color === currentTurn) {
+        selectedPiece = { row, col, piece: pieceElement.dataset.piece };
+        highlightMoves(row, col, pieceElement.dataset.piece);
+      } else if (selectedPiece) {
+        movePiece(row, col);
+      }
+    }
+
+    function highlightMoves(row, col, piece) {
+      clearHighlights();
+      const color = piece === piece.toUpperCase() ? 'white' : 'black';
+
+      const moves = getPossibleMoves(row, col, piece, color);
+      moves.forEach(([r, c]) => {
+        const square = document.querySelector(`[data-row='${r}'][data-col='${c}']`);
+        if (square) square.classList.add("highlight");
+      });
+    }
+
+    function getPossibleMoves(row, col, piece, color) {
+      const moves = [];
+      const directions = {
+        'p': [[1, 0], [1, -1], [1, 1]],
+        'P': [[-1, 0], [-1, -1], [-1, 1]],
+        'n': [[2, 1], [2, -1], [-2, 1], [-2, -1], [1, 2], [1, -2], [-1, 2], [-1, -2]],
+        'r': [[1, 0], [-1, 0], [0, 1], [0, -1]],
+        'b': [[1, 1], [-1, -1], [1, -1], [-1, 1]],
+        'q': [[1, 1], [-1, -1], [1, -1], [-1, 1], [1, 0], [-1, 0], [0, 1], [0, -1]],
+        'k': [[1, 1], [-1, -1], [1, -1], [-1, 1], [1, 0], [-1, 0], [0, 1], [0, -1]]
+      };
+
+      if (piece.toLowerCase() === 'p') {
+        let direction = piece === 'P' ? -1 : 1;
+        if (isInBounds(row + direction, col) && !initialBoard[row + direction][col]) {
+          moves.push([row + direction, col]);
+        }
+        [[row + direction, col - 1], [row + direction, col + 1]].forEach(([r, c]) => {
+          if (isInBounds(r, c) && initialBoard[r][c] && isOpponentPiece(r, c, color)) {
+            moves.push([r, c]);
+          }
+        });
+      } else if (piece.toLowerCase() === 'n') {
+        directions['n'].forEach(([dr, dc]) => {
+          const newRow = row + dr;
+          const newCol = col + dc;
+          if (isInBounds(newRow, newCol) && !isAllyPiece(newRow, newCol, color)) {
+            moves.push([newRow, newCol]);
+          }
+        });
+      } else {
+        const pieceType = piece.toLowerCase();
+        const range = pieceType === 'k' ? 1 : 8;
+        directions[pieceType].forEach(([dr, dc]) => {
+          for (let i = 1; i <= range; i++) {
+            const newRow = row + dr * i;
+            const newCol = col + dc * i;
+            if (!isInBounds(newRow, newCol) || isAllyPiece(newRow, newCol, color)) break;
+            moves.push([newRow, newCol]);
+            if (isOpponentPiece(newRow, newCol, color)) break;
+          }
+        });
+      }
+      return moves;
+    }
+
+    function movePiece(row, col) {
+      if (!document.querySelector(`[data-row='${row}'][data-col='${col}']`).classList.contains("highlight")) return;
+
+      initialBoard[selectedPiece.row][selectedPiece.col] = '';
+      initialBoard[row][col] = selectedPiece.piece;
+      selectedPiece = null;
+      clearHighlights();
+      switchTurn();
+      renderBoard();
+    }
+
+    function isInBounds(row, col) {
+      return row >= 0 && row < 8 && col >= 0 && col < 8;
+    }
+
+    function isOpponentPiece(row, col, color) {
+      const piece = initialBoard[row][col];
+      return piece && ((color === 'white' && piece === piece.toLowerCase()) || (color === 'black' && piece === piece.toUpperCase()));
+    }
+
+    function isAllyPiece(row, col, color) {
+      const piece = initialBoard[row][col];
+      return piece && ((color === 'white' && piece === piece.toUpperCase()) || (color === 'black' && piece === piece.toLowerCase()));
+    }
+
+    function clearHighlights() {
+      document.querySelectorAll('.highlight').forEach(sq => sq.classList.remove('highlight'));
+    }
+
+    function switchTurn() {
+      currentTurn = currentTurn === 'white' ? 'black' : 'white';
+    }
+
+    renderBoard();
+  </script>
+</body>
+</html>
